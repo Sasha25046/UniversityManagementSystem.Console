@@ -1,5 +1,4 @@
-﻿// IUnitOfWork.cs
-
+﻿
 using System;
 
 namespace UniversityManagementSystem.Console

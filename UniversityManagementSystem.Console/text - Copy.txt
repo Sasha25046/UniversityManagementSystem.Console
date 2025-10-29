@@ -221,13 +221,13 @@ CREATE TABLE StaffHistory (
     FOREIGN KEY (title_id) REFERENCES JobTitles(title_id)
 );
 
--- 17. Аудит_Змін (AuditLog) - Використовуємо TEXT замість JSON для сумісності
+-- 17. Аудит_Змін (AuditLog)
 CREATE TABLE AuditLog (
     log_id INT PRIMARY KEY AUTO_INCREMENT,
     table_name VARCHAR(50) NOT NULL,
     record_id INT NOT NULL,
     operation_type ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
-    change_details TEXT, -- Зберігаємо JSON як текстовий рядок
+    change_details TEXT, 
     changed_by INT,
     changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     
@@ -445,10 +445,10 @@ INSERT INTO UserRoles (user_id, role_id) VALUES (1, 1);
 USE UniversityDB;
 
 DELIMITER // 
-
+ 
 -- 6. SP: Оновлення статусу студента 
 CREATE PROCEDURE sp_UpdateStudentStatus (
-    IN p_student_id INT, -- ТУТ БУЛА ПРОПУЩЕНА ЧАСТИНА
+    IN p_student_id INT, 
     IN p_new_status ENUM('Active', 'Academic_Leave', 'Graduated', 'Expelled'),
     IN p_updater_user_id INT
 )
@@ -498,7 +498,7 @@ CREATE PROCEDURE sp_SoftDeleteStudent (
 BEGIN
     UPDATE Students
     SET is_deleted = TRUE, 
-        student_status = 'Expelled', -- << ДОДАНА ЛОГІКА ЗМІНИ СТАТУСУ
+        student_status = 'Expelled', 
         updated_by = p_deleter_user_id,
         updated_at = CURRENT_TIMESTAMP
     WHERE student_id = p_student_id;

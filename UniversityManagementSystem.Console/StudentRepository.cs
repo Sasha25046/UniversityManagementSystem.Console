@@ -1,5 +1,4 @@
-﻿// StudentRepository.cs
-
+﻿
 using System.Data;
 using System.Collections.Generic;
 using MySqlConnector;

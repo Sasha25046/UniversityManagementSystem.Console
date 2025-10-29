@@ -53,7 +53,6 @@ namespace UniversityManagementSystem.Console
             }
             catch (MySqlException ex)
             {
-                // ... (обробка помилок)
                 System.Console.WriteLine($"\nПОМИЛКА БАЗИ ДАНИХ (MySqlException): {ex.Message}");
             }
             catch (Exception ex)
