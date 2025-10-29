@@ -1,0 +1,507 @@
+﻿-- ===============================================
+-- ЧАСТИНА 1: Створення бази даних та таблиць (17 сутностей)
+-- ===============================================
+
+CREATE DATABASE IF NOT EXISTS UniversityDB;
+USE UniversityDB;
+
+-- 1. Користувачі (Users) - підтримує Soft Delete та Аудит
+CREATE TABLE Users (
+    user_id INT PRIMARY KEY AUTO_INCREMENT,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 2. Ролі (Roles)
+CREATE TABLE Roles (
+    role_id INT PRIMARY KEY AUTO_INCREMENT,
+    role_name VARCHAR(50) UNIQUE NOT NULL
+);
+
+-- 3. Призначення_Ролей (UserRoles)
+CREATE TABLE UserRoles (
+    user_role_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    role_id INT NOT NULL,
+    
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    FOREIGN KEY (role_id) REFERENCES Roles(role_id),
+    
+    UNIQUE (user_id, role_id)
+);
+
+-- 4. Факультети (Faculties) - підтримує Soft Delete та Аудит
+CREATE TABLE Faculties (
+    faculty_id INT PRIMARY KEY AUTO_INCREMENT,
+    faculty_name VARCHAR(100) UNIQUE NOT NULL,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 5. Кафедри (Departments) - підтримує Soft Delete та Аудит
+CREATE TABLE Departments (
+    department_id INT PRIMARY KEY AUTO_INCREMENT,
+    department_name VARCHAR(100) UNIQUE NOT NULL,
+    faculty_id INT NOT NULL,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (faculty_id) REFERENCES Faculties(faculty_id),
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 6. Програми_Навчання (StudyPrograms) - підтримує Soft Delete та Аудит
+CREATE TABLE StudyPrograms (
+    program_id INT PRIMARY KEY AUTO_INCREMENT,
+    program_name VARCHAR(150) NOT NULL,
+    department_id INT NOT NULL,
+    duration_years INT DEFAULT 4,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (department_id) REFERENCES Departments(department_id),
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 7. Студенти (Students) - підтримує Soft Delete та Аудит
+CREATE TABLE Students (
+    student_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT UNIQUE NOT NULL,
+    program_id INT NOT NULL,
+    enrollment_date DATE NOT NULL,
+    student_status ENUM('Active', 'Academic_Leave', 'Graduated', 'Expelled') DEFAULT 'Active',
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    FOREIGN KEY (program_id) REFERENCES StudyPrograms(program_id),
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 8. Курси (Courses) - підтримує Аудит
+CREATE TABLE Courses (
+    course_id INT PRIMARY KEY AUTO_INCREMENT,
+    course_name VARCHAR(150) NOT NULL,
+    course_code VARCHAR(10) UNIQUE NOT NULL,
+    department_id INT NOT NULL,
+    credits DECIMAL(3, 1) NOT NULL,
+    
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (department_id) REFERENCES Departments(department_id),
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 9. Викладачі (Teachers) - підтримує Soft Delete та Аудит
+CREATE TABLE Teachers (
+    teacher_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT UNIQUE NOT NULL,
+    department_id INT NOT NULL,
+    hire_date DATE NOT NULL,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    FOREIGN KEY (department_id) REFERENCES Departments(department_id),
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 10. Призначення_Курсу (CourseAssignment)
+CREATE TABLE CourseAssignment (
+    assignment_id INT PRIMARY KEY AUTO_INCREMENT,
+    course_id INT NOT NULL,
+    teacher_id INT NOT NULL,
+    academic_year YEAR NOT NULL,
+    
+    FOREIGN KEY (course_id) REFERENCES Courses(course_id),
+    FOREIGN KEY (teacher_id) REFERENCES Teachers(teacher_id),
+    UNIQUE (course_id, teacher_id, academic_year)
+);
+
+-- 11. Аудиторії (Rooms) - підтримує Soft Delete
+CREATE TABLE Rooms (
+    room_id INT PRIMARY KEY AUTO_INCREMENT,
+    room_number VARCHAR(10) UNIQUE NOT NULL,
+    capacity INT NOT NULL,
+    faculty_id INT,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    
+    FOREIGN KEY (faculty_id) REFERENCES Faculties(faculty_id)
+);
+
+-- 12. Розклад (Schedule) - підтримує Soft Delete
+CREATE TABLE Schedule (
+    schedule_id INT PRIMARY KEY AUTO_INCREMENT,
+    course_assignment_id INT NOT NULL,
+    room_id INT NOT NULL,
+    day_of_week ENUM('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat') NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    
+    FOREIGN KEY (course_assignment_id) REFERENCES CourseAssignment(assignment_id),
+    FOREIGN KEY (room_id) REFERENCES Rooms(room_id)
+);
+
+-- 13. Оцінки (Grades) - підтримує Аудит
+CREATE TABLE Grades (
+    grade_id INT PRIMARY KEY AUTO_INCREMENT,
+    student_id INT NOT NULL,
+    course_id INT NOT NULL,
+    teacher_id INT,
+    grade DECIMAL(3, 2) NOT NULL,
+    date_recorded DATE NOT NULL,
+    
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (student_id) REFERENCES Students(student_id),
+    FOREIGN KEY (course_id) REFERENCES Courses(course_id),
+    FOREIGN KEY (teacher_id) REFERENCES Teachers(teacher_id),
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id),
+    UNIQUE (student_id, course_id)
+);
+
+-- 14. Посади (JobTitles)
+CREATE TABLE JobTitles (
+    title_id INT PRIMARY KEY AUTO_INCREMENT,
+    title_name VARCHAR(100) UNIQUE NOT NULL
+);
+
+-- 15. Персонал (Staff) - підтримує Soft Delete та Аудит
+CREATE TABLE Staff (
+    staff_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT UNIQUE NOT NULL,
+    department_id INT NOT NULL,
+    current_title_id INT NOT NULL,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    FOREIGN KEY (department_id) REFERENCES Departments(department_id),
+    FOREIGN KEY (current_title_id) REFERENCES JobTitles(title_id),
+    FOREIGN KEY (updated_by) REFERENCES Users(user_id)
+);
+
+-- 16. Історія_Посад (StaffHistory)
+CREATE TABLE StaffHistory (
+    history_id INT PRIMARY KEY AUTO_INCREMENT,
+    staff_id INT NOT NULL,
+    title_id INT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE,
+    
+    FOREIGN KEY (staff_id) REFERENCES Staff(staff_id),
+    FOREIGN KEY (title_id) REFERENCES JobTitles(title_id)
+);
+
+-- 17. Аудит_Змін (AuditLog) - Використовуємо TEXT замість JSON для сумісності
+CREATE TABLE AuditLog (
+    log_id INT PRIMARY KEY AUTO_INCREMENT,
+    table_name VARCHAR(50) NOT NULL,
+    record_id INT NOT NULL,
+    operation_type ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
+    change_details TEXT, -- Зберігаємо JSON як текстовий рядок
+    changed_by INT,
+    changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (changed_by) REFERENCES Users(user_id)
+);
+
+-- ===============================================
+-- ЧАСТИНА 2: Створення індексів
+-- ===============================================
+
+CREATE INDEX idx_students_program ON Students (program_id);
+CREATE INDEX idx_teachers_department ON Teachers (department_id);
+CREATE INDEX idx_users_name ON Users (last_name, first_name);
+
+
+-- ===============================================
+-- ЧАСТИНА 3: Створення об'єктів БД (SP, Function, Triggers, Views)
+-- ===============================================
+
+DELIMITER //
+
+-- 1. SP: Додавання користувача та встановлення його ролі
+CREATE PROCEDURE sp_AddUserAndRole (
+    IN p_first_name VARCHAR(50),
+    IN p_last_name VARCHAR(50),
+    IN p_email VARCHAR(100),
+    IN p_password_hash VARCHAR(255),
+    IN p_role_name VARCHAR(50),
+    IN p_creator_user_id INT
+)
+BEGIN
+    DECLARE v_new_user_id INT;
+    DECLARE v_role_id INT;
+    
+    INSERT INTO Users (first_name, last_name, email, password_hash, updated_by)
+    VALUES (p_first_name, p_last_name, p_email, p_password_hash, p_creator_user_id);
+    
+    SET v_new_user_id = LAST_INSERT_ID();
+    
+    SELECT role_id INTO v_role_id FROM Roles WHERE role_name = p_role_name LIMIT 1;
+    
+    IF v_role_id IS NOT NULL THEN
+        INSERT INTO UserRoles (user_id, role_id) VALUES (v_new_user_id, v_role_id);
+    END IF;
+    
+    SELECT v_new_user_id AS new_user_id;
+END //
+
+-- 2. SP: Soft Delete для студента
+CREATE PROCEDURE sp_SoftDeleteStudent (
+    IN p_student_id INT,
+    IN p_deleter_user_id INT
+)
+BEGIN
+    UPDATE Students
+    SET is_deleted = TRUE, 
+        updated_by = p_deleter_user_id,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE student_id = p_student_id;
+END //
+
+-- 3. SP: Оновлення курсу
+CREATE PROCEDURE sp_UpdateCourse (
+    IN p_course_id INT,
+    IN p_course_name VARCHAR(150),
+    IN p_course_code VARCHAR(10),
+    IN p_department_id INT,
+    IN p_credits DECIMAL(3, 1),
+    IN p_updater_user_id INT
+)
+BEGIN
+    UPDATE Courses
+    SET course_name = p_course_name,
+        course_code = p_course_code,
+        department_id = p_department_id,
+        credits = p_credits,
+        updated_by = p_updater_user_id
+    WHERE course_id = p_course_id;
+END //
+
+-- 4. SP: Реєстрація оцінки
+CREATE PROCEDURE sp_RecordGrade (
+    IN p_student_id INT,
+    IN p_course_id INT,
+    IN p_teacher_id INT,
+    IN p_grade DECIMAL(3, 2),
+    IN p_recorder_user_id INT
+)
+BEGIN
+    INSERT INTO Grades (student_id, course_id, teacher_id, grade, date_recorded, updated_by)
+    VALUES (p_student_id, p_course_id, p_teacher_id, p_grade, CURDATE(), p_recorder_user_id)
+    ON DUPLICATE KEY UPDATE 
+        grade = p_grade, 
+        updated_by = p_recorder_user_id, 
+        date_recorded = CURDATE();
+END //
+
+-- 5. SP: Пошук викладачів
+CREATE PROCEDURE sp_SearchTeachers (
+    IN p_search_term VARCHAR(100)
+)
+BEGIN
+    SELECT 
+        T.teacher_id, U.first_name, U.last_name, D.department_name
+    FROM Teachers T
+    JOIN Users U ON T.user_id = U.user_id
+    JOIN Departments D ON T.department_id = D.department_id
+    WHERE 
+        (U.first_name LIKE CONCAT('%', p_search_term, '%') OR 
+         U.last_name LIKE CONCAT('%', p_search_term, '%'))
+        AND T.is_deleted = FALSE;
+END //
+
+-- 6. Function: Розрахунок середнього балу студента
+CREATE FUNCTION fn_CalculateStudentGPA (
+    p_student_id INT
+)
+RETURNS DECIMAL(3, 2)
+READS SQL DATA
+BEGIN
+    DECLARE v_gpa DECIMAL(3, 2);
+    
+    SELECT AVG(G.grade) INTO v_gpa
+    FROM Grades G
+    WHERE G.student_id = p_student_id;
+    
+    RETURN IFNULL(v_gpa, 0.00);
+END //
+
+-- 7. Trigger: Аудит оновлення таблиці Users
+CREATE TRIGGER tr_Users_After_Update
+AFTER UPDATE ON Users
+FOR EACH ROW
+BEGIN
+    IF NEW.first_name <> OLD.first_name OR NEW.last_name <> OLD.last_name OR NEW.email <> OLD.email OR NEW.is_deleted <> OLD.is_deleted THEN
+        INSERT INTO AuditLog (table_name, record_id, operation_type, change_details, changed_by)
+        VALUES (
+            'Users', 
+            NEW.user_id, 
+            'UPDATE', 
+            JSON_OBJECT(
+                'old_first_name', OLD.first_name, 
+                'new_first_name', NEW.first_name,
+                'old_email', OLD.email, 
+                'new_email', NEW.email
+            ),
+            NEW.updated_by
+        );
+    END IF;
+END //
+
+-- 8. Trigger: Аудит вставлення оцінки
+CREATE TRIGGER tr_Grades_After_Insert
+AFTER INSERT ON Grades
+FOR EACH ROW
+BEGIN
+    INSERT INTO AuditLog (table_name, record_id, operation_type, change_details, changed_by)
+    VALUES (
+        'Grades', 
+        NEW.grade_id, 
+        'INSERT', 
+        JSON_OBJECT(
+            'student_id', NEW.student_id, 
+            'course_id', NEW.course_id,
+            'grade', NEW.grade
+        ),
+        NEW.updated_by
+    );
+END //
+
+DELIMITER ;
+
+-- 9. View: Активні студенти
+CREATE VIEW view_ActiveStudents AS
+SELECT 
+    S.student_id,
+    U.first_name,
+    U.last_name,
+    P.program_name,
+    D.department_name
+FROM Students S
+JOIN Users U ON S.user_id = U.user_id
+JOIN StudyPrograms P ON S.program_id = P.program_id
+JOIN Departments D ON P.department_id = D.department_id
+WHERE S.is_deleted = FALSE AND S.student_status = 'Active';
+
+-- 10. View: Повний розклад
+CREATE VIEW view_FullSchedule AS
+SELECT
+    SCH.day_of_week,
+    SCH.start_time,
+    SCH.end_time,
+    C.course_name,
+    U_T.last_name AS teacher_last_name,
+    R.room_number
+FROM Schedule SCH
+JOIN CourseAssignment CA ON SCH.course_assignment_id = CA.assignment_id
+JOIN Courses C ON CA.course_id = C.course_id
+JOIN Teachers T ON CA.teacher_id = T.teacher_id
+JOIN Users U_T ON T.user_id = U_T.user_id
+JOIN Rooms R ON SCH.room_id = R.room_id
+WHERE SCH.is_deleted = FALSE;
+
+-- ===============================================
+-- ЧАСТИНА 4: Початкові дані
+-- ===============================================
+
+INSERT INTO Roles (role_name) VALUES ('Administrator'), ('Teacher'), ('Student'), ('Staff');
+INSERT INTO JobTitles (title_name) VALUES ('Dean'), ('Department Head'), ('Accountant'), ('Librarian');
+
+INSERT INTO Users (user_id, first_name, last_name, email, password_hash)
+VALUES (1, 'Admin', 'System', 'admin@univ.edu', 'some_secure_hash');
+INSERT INTO UserRoles (user_id, role_id) VALUES (1, 1);
+
+USE UniversityDB;
+
+DELIMITER // 
+
+-- 6. SP: Оновлення статусу студента 
+CREATE PROCEDURE sp_UpdateStudentStatus (
+    IN p_student_id INT, -- ТУТ БУЛА ПРОПУЩЕНА ЧАСТИНА
+    IN p_new_status ENUM('Active', 'Academic_Leave', 'Graduated', 'Expelled'),
+    IN p_updater_user_id INT
+)
+BEGIN
+    UPDATE Students
+    SET student_status = p_new_status,
+        updated_by = p_updater_user_id
+    WHERE student_id = p_student_id;
+END //
+
+DELIMITER ;
+
+DELIMITER // 
+
+-- SP 7: Отримання оцінок студента по курсу
+CREATE PROCEDURE sp_GetStudentGradesByCourse (
+    IN p_student_id INT,
+    IN p_course_code VARCHAR(10)
+)
+BEGIN
+    SELECT
+        C.course_name, G.grade, G.date_recorded, U_T.last_name AS teacher_last_name
+    FROM Grades G
+    JOIN Courses C ON G.course_id = C.course_id
+    LEFT JOIN Teachers T ON G.teacher_id = T.teacher_id
+    LEFT JOIN Users U_T ON T.user_id = U_T.user_id
+    WHERE G.student_id = p_student_id AND C.course_code = p_course_code;
+END //
+
+DELIMITER ;
+
+
+-- 4. FULLTEXT Індекс для пошуку по назвах курсів (для швидкого пошуку)
+CREATE FULLTEXT INDEX fidx_course_name ON Courses (course_name);
+
+-- 5. Додатковий B-tree Індекс для частого пошуку по email
+CREATE UNIQUE INDEX uidx_users_email ON Users (email);
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS sp_SoftDeleteStudent;
+
+CREATE PROCEDURE sp_SoftDeleteStudent (
+    IN p_student_id INT,
+    IN p_deleter_user_id INT
+)
+BEGIN
+    UPDATE Students
+    SET is_deleted = TRUE, 
+        student_status = 'Expelled', -- << ДОДАНА ЛОГІКА ЗМІНИ СТАТУСУ
+        updated_by = p_deleter_user_id,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE student_id = p_student_id;
+END //
+
+DELIMITER ;

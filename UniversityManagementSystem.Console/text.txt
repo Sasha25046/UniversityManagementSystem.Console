@@ -1,0 +1,206 @@
+﻿
+
+Table Users {
+user_id integer [pk, increment]
+first_name varchar
+last_name varchar
+email varchar [unique, not null]
+password_hash varchar
+is_deleted boolean [note: 'Soft Delete']
+created_at timestamp
+updated_at timestamp [note: 'Дата останньої зміни']
+updated_by integer [note: 'Користувач, що змінив']
+}
+
+Table Roles {
+role_id integer [pk, increment]
+role_name varchar [unique]
+}
+
+Table UserRoles {
+user_role_id integer [pk, increment]
+user_id integer [not null]
+role_id integer [not null]
+
+indexes {
+(user_id, role_id) [unique]
+}
+}
+
+Table Faculties {
+faculty_id integer [pk, increment]
+faculty_name varchar [unique]
+
+is_deleted boolean [note: 'Soft Delete']
+updated_at timestamp
+updated_by integer
+}
+
+Table Departments {
+department_id integer [pk, increment]
+department_name varchar [unique]
+faculty_id integer [not null]
+
+is_deleted boolean [note: 'Soft Delete']
+updated_at timestamp
+updated_by integer
+}
+
+Table StudyPrograms {
+program_id integer [pk, increment]
+program_name varchar
+department_id integer [not null]
+duration_years integer
+
+is_deleted boolean [note: 'Soft Delete']
+updated_at timestamp
+updated_by integer
+}
+
+Table Students {
+student_id integer [pk, increment]
+user_id integer [unique, not null] // One-to-One з Users
+program_id integer [not null]
+enrollment_date date
+student_status varchar [note: 'ENUM: Active, Academic_Leave, Graduated, Expelled']
+
+is_deleted boolean [note: 'Soft Delete']
+updated_at timestamp
+updated_by integer
+}
+
+Table Courses {
+course_id integer [pk, increment]
+course_name varchar
+course_code varchar [unique, not null]
+department_id integer [not null]
+credits decimal
+
+updated_at timestamp [note: 'Аудит']
+updated_by integer
+}
+
+Table Teachers {
+teacher_id integer [pk, increment]
+user_id integer [unique, not null] // One-to-One з Users
+department_id integer [not null]
+hire_date date
+
+is_deleted boolean [note: 'Soft Delete']
+updated_at timestamp
+updated_by integer
+}
+
+Table CourseAssignment {
+assignment_id integer [pk, increment]
+course_id integer [not null]
+teacher_id integer [not null]
+academic_year year
+
+indexes {
+(course_id, teacher_id, academic_year) [unique]
+}
+}
+
+Table Rooms {
+room_id integer [pk, increment]
+room_number varchar [unique]
+capacity integer
+faculty_id integer
+
+is_deleted boolean [note: 'Soft Delete']
+}
+
+Table Schedule {
+schedule_id integer [pk, increment]
+course_assignment_id integer [not null]
+room_id integer [not null]
+day_of_week varchar [note: 'ENUM: Mon...Sat']
+start_time time
+end_time time
+
+is_deleted boolean [note: 'Soft Delete']
+}
+
+Table Grades {
+grade_id integer [pk, increment]
+student_id integer [not null]
+course_id integer [not null]
+teacher_id integer
+grade decimal
+date_recorded date
+
+updated_at timestamp [note: 'Аудит']
+updated_by integer
+
+indexes {
+(student_id, course_id) [unique]
+}
+}
+
+Table JobTitles {
+title_id integer [pk, increment]
+title_name varchar [unique]
+}
+
+Table Staff {
+staff_id integer [pk, increment]
+user_id integer [unique, not null] // One-to-One з Users
+department_id integer [not null]
+current_title_id integer [not null]
+
+is_deleted boolean [note: 'Soft Delete']
+updated_at timestamp
+updated_by integer
+}
+
+Table StaffHistory {
+history_id integer [pk, increment]
+staff_id integer [not null]
+title_id integer [not null]
+start_date date
+end_date date
+}
+
+Table AuditLog {
+log_id integer [pk, increment]
+table_name varchar
+record_id integer
+operation_type varchar [note: 'ENUM: INSERT, UPDATE, DELETE']
+change_details text
+changed_by integer
+changed_at timestamp
+}
+
+
+Ref: Users.updated_by > Users.user_id
+Ref: AuditLog.changed_by > Users.user_id
+Ref: Teachers.user_id - Users.user_id
+Ref: Students.user_id - Users.user_id
+Ref: Staff.user_id - Users.user_id
+Ref: UserRoles.user_id > Users.user_id
+Ref: UserRoles.role_id > Roles.role_id
+
+Ref: Departments.faculty_id > Faculties.faculty_id
+Ref: StudyPrograms.department_id > Departments.department_id
+Ref: Rooms.faculty_id > Faculties.faculty_id
+
+Ref: Teachers.department_id > Departments.department_id
+Ref: Courses.department_id > Departments.department_id
+
+Ref: Students.program_id > StudyPrograms.program_id
+Ref: Grades.student_id > Students.student_id
+
+Ref: CourseAssignment.course_id > Courses.course_id
+Ref: CourseAssignment.teacher_id > Teachers.teacher_id
+Ref: Schedule.course_assignment_id > CourseAssignment.assignment_id
+Ref: Schedule.room_id > Rooms.room_id
+
+Ref: Grades.course_id > Courses.course_id
+Ref: Grades.teacher_id > Teachers.teacher_id
+Ref: Grades.updated_by > Users.user_id
+
+Ref: Staff.department_id > Departments.department_id
+Ref: Staff.current_title_id > JobTitles.title_id
+Ref: StaffHistory.staff_id > Staff.staff_id
+Ref: StaffHistory.title_id > JobTitles.title_id
