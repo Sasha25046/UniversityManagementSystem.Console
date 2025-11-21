@@ -1,6 +1,10 @@
-﻿using MySqlConnector;
-using System;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
+using MongoDB.Driver;
+using MySqlConnector;
+using StackExchange.Redis;
+using UniversityManagementSystem.Console.NoSql;
 
 namespace UniversityManagementSystem.Console
 {
@@ -9,51 +13,112 @@ namespace UniversityManagementSystem.Console
         private const string ConnectionString = "server=localhost;port=3306;database=UniversityDB;uid=root;password=windows123";
         private const int AdminUserId = 1;
 
+        private const string RedisHost = "redis-12766.c80.us-east-1-2.ec2.cloud.redislabs.com";
+        private const int RedisPort = 12766;
+        private const string RedisPassword = "IUH9TPbyk4LvGTRpATvtfrBydJFvZLDW";
+        private const string RedisUser = "default";
+
         static void Main(string[] args)
         {
             System.Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+            System.Console.WriteLine("--- Лабораторна робота: Гібридні бази даних (MySQL, MongoDB, Redis) ---");
+            System.Console.WriteLine($"Тестування на {BenchmarkDataGenerator.COURSES_COUNT} записах.");
+
+            IConnectionMultiplexer? redis = null;
 
             try
             {
                 using (var uow = new UnitOfWork(ConnectionString))
                 {
-                    System.Console.WriteLine("1. Демонстрація UoW: Реєстрація нового студента (Транзакція)...");
+                    var sqlRepo = uow.Courses;
+                    var noSqlRepo = new CourseDetailsNoSqlRepository();
 
-                    int newUserId = uow.RegisterNewStudent(
-                        "Саша", "Скор", "bohdiazh.a.new@gmail.com", 
-                        "secure_hash_for_olena", programId: 2, AdminUserId);
+                    System.Console.WriteLine("\n--- ЕТАП I: БЕНЧМАРК (MongoDB vs MySQL JSON) ---");
+                    System.Console.WriteLine("1. Підготовка даних.");
 
-                    System.Console.WriteLine($"   -> Успішна реєстрація. Створено UserID: {newUserId}");
+                    sqlRepo.DeleteTestCourses(BenchmarkDataGenerator.START_COURSE_ID);
+                    noSqlRepo.ClearCollection();
+                    System.Console.WriteLine("-> Тестові дані очищено.");
+
+                    var mongoData = BenchmarkDataGenerator.GenerateNoSqlData();
+                    var sqlData = BenchmarkDataGenerator.GenerateSqlData();
 
 
+                    var sw = Stopwatch.StartNew();
+                    sqlRepo.UpsertTestCourses(sqlData, AdminUserId);
+                    sw.Stop();
+                    System.Console.WriteLine($"\n2. Запис MySQL (JSON): {sw.ElapsedMilliseconds} мс.");
 
-                    if (newUserId > 0)
+                    sw.Restart();
+                    noSqlRepo.UpsertMany(mongoData);
+                    sw.Stop();
+                    System.Console.WriteLine($"2. Запис MongoDB (Atlas): {sw.ElapsedMilliseconds} мс.");
+
+                    System.Console.WriteLine("\nТЕСТ: Фільтрація за числовим діапазоном (Min RAM).");
+                    int searchRam = BenchmarkDataGenerator.SEARCH_MIN_RAM; // 32 GB
+
+                    sw.Restart();
+                    var sqlRamResults = sqlRepo.FindByRamRangeSql(searchRam);
+                    sw.Stop();
+                    System.Console.WriteLine($"  MySQL JSON (Ram Range): {sw.ElapsedMilliseconds} мс. Знайдено: {sqlRamResults.Count}");
+
+                    sw.Restart();
+                    var mongoRamResults = noSqlRepo.FindByRamRange(searchRam);
+                    sw.Stop();
+                    System.Console.WriteLine($"  MongoDB (Ram Range): {sw.ElapsedMilliseconds} мс. Знайдено: {mongoRamResults.Count}");
+
+                    System.Console.WriteLine("\n--- ПОРІВНЯННЯ ШВИДКОДІЇ ЗАВЕРШЕНО ---");
+
+                    System.Console.WriteLine("\n--- ЕТАП II: ДЕМОНСТРАЦІЯ REDIS (Key-Value) ---");
+                    System.Console.WriteLine("4. Демонстрація Redis: Кешування GPA (Пункт 6)");
+
+                    var options = new ConfigurationOptions
                     {
-                        int actualStudentIdToDelete = uow.Students.GetStudentIdByUserId(newUserId);
+                        EndPoints = { { RedisHost, RedisPort } },
+                        User = RedisUser,
+                        Password = RedisPassword,
+                        AbortOnConnectFail = false,
+                        SyncTimeout = 5000
+                    };
 
-                        System.Console.WriteLine("\n2. Демонстрація Repository: Отримання активних студентів (через View)...");
+                    redis = ConnectionMultiplexer.Connect(options);
+                    var gpaCache = new GpaCacheRepository(redis);
 
-                        if (actualStudentIdToDelete > 0)
-                        {
-                            System.Console.WriteLine($"   -> Знайдено StudentID: {actualStudentIdToDelete} для видалення.");
+                    System.Console.WriteLine($"\n-> Базовий запит PING: {gpaCache.Ping()}");
 
-                            System.Console.WriteLine("\n3. Демонстрація Repository: Soft Delete студента (через SP)...");
+                    int testStudentId = 1001;
+                    decimal calculatedGpa = 4.75M;
 
-                            uow.Students.SoftDelete(studentId: actualStudentIdToDelete, AdminUserId);
+                    var initialGpa = gpaCache.GetCachedGpa(testStudentId);
+                    System.Console.WriteLine($"1. GPA з кешу (спочатку): {initialGpa?.ToString() ?? "NULL"}");
 
-                            System.Console.WriteLine("   -> Soft Delete виконано успішно.");
-                            System.Console.WriteLine($"   -> ПЕРЕВІРКА: StudentID {actualStudentIdToDelete} має бути is_deleted=1.");
-                        }
-                        else
-                        {
-                            System.Console.WriteLine($"\nПОМИЛКА ЛОГІКИ: Не вдалося знайти StudentID для щойно створеного UserID: {newUserId}. Soft Delete не виконано.");
-                        }
-                    }
+                    gpaCache.SetCachedGpa(testStudentId, calculatedGpa);
+                    System.Console.WriteLine($"2. GPA записано в кеш (SET).");
+
+                    var cachedGpa = gpaCache.GetCachedGpa(testStudentId);
+                    System.Console.WriteLine($"3. GPA з кешу (після запису): {cachedGpa}");
+
+                    gpaCache.DeleteCache(testStudentId);
+                    System.Console.WriteLine($"4. Ключ видалено (DELETE).");
+
+                    var afterDeleteGpa = gpaCache.GetCachedGpa(testStudentId);
+                    System.Console.WriteLine($"4.1. GPA з кешу (після видалення): {afterDeleteGpa?.ToString() ?? "NULL"}");
+
+                    System.Console.WriteLine("\n--- ДЕМОНСТРАЦІЯ УСПІШНО ЗАВЕРШЕНА ---");
                 }
             }
             catch (MySqlException ex)
             {
-                System.Console.WriteLine($"\nПОМИЛКА БАЗИ ДАНИХ (MySqlException): {ex.Message}");
+                System.Console.WriteLine($"\nПОМИЛКА БАЗИ ДАНИХ (MySQL): Переконайтеся, що SP створено: {ex.Message}");
+            }
+            catch (MongoWriteException ex)
+            {
+                System.Console.WriteLine($"\nПОМИЛКА MONGO: Переконайтеся, що Atlas-кластер доступний: {ex.Message}");
+            }
+            catch (RedisConnectionException ex)
+            {
+                System.Console.WriteLine($"\nПОМИЛКА REDIS: Не вдалося підключитися. Переконайтеся, що облікові дані Redis Cloud коректні: {ex.Message}");
             }
             catch (Exception ex)
             {
@@ -61,7 +126,8 @@ namespace UniversityManagementSystem.Console
             }
             finally
             {
-                System.Console.WriteLine("\nПрограма завершила роботу.");
+                redis?.Dispose();
+                System.Console.WriteLine("\nПрограма завершила роботу. Натисніть будь-яку клавішу...");
                 System.Console.ReadKey();
             }
         }

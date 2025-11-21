@@ -10,21 +10,22 @@ namespace UniversityManagementSystem.Console
 {
     public class UnitOfWork : IUnitOfWork
     {
-        private readonly string _connectionString;
         private readonly MySqlConnection _connection;
+        private MySqlTransaction? _transaction;
 
         public IStudentRepository Students { get; }
+        public ICourseRepository Courses { get; } 
 
         public UnitOfWork(string connectionString)
         {
-            _connectionString = connectionString;
-
-            _connection = new MySqlConnection(_connectionString);
+            _connection = new MySqlConnection(connectionString);
             _connection.Open();
 
             Students = new StudentRepository(_connection);
+            Courses = new CourseRepository(_connection); 
         }
 
+       
         public int RegisterNewStudent(string firstName, string lastName, string email, string passwordHash, int programId, int creatorId)
         {
             using (var command = new MySqlCommand("sp_RegisterNewStudentTransaction", _connection))
@@ -45,8 +46,12 @@ namespace UniversityManagementSystem.Console
 
         public void Dispose()
         {
+            _transaction?.Rollback();
+
             _connection?.Close();
             _connection?.Dispose();
+
+            GC.SuppressFinalize(this);
         }
     }
 }
