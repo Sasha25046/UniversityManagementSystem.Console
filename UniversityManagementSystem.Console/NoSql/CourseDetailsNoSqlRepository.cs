@@ -1,5 +1,4 @@
-﻿// Шлях: UniversityManagementSystem.Console/NoSql/CourseDetailsNoSqlRepository.cs
-
+﻿
 using MongoDB.Driver;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,10 +8,17 @@ namespace UniversityManagementSystem.Console.NoSql
     public interface ICourseDetailsNoSqlRepository
     {
         void UpsertMany(List<CourseDetailsDocument> documents);
-        List<CourseDetailsDocument> FindByRamRange(int minRamGb); 
+
+        List<CourseDetailsDocument> FindByRamRange(int minRamGb);
+
+        List<CourseDetailsDocument> FindByRamRangeCovered(int minRamGb);
+
+        List<CourseDetailsDocument> FindByTopic(string topic);
+
         void ClearCollection();
     }
 
+   
     public class CourseDetailsNoSqlRepository : ICourseDetailsNoSqlRepository
     {
         private const string CONNECTION_STRING = "mongodb://localhost:27017";
@@ -27,19 +33,27 @@ namespace UniversityManagementSystem.Console.NoSql
             var database = client.GetDatabase(DATABASE_NAME);
             _detailsCollection = database.GetCollection<CourseDetailsDocument>(COLLECTION_NAME);
 
-            var indexKeys = Builders<CourseDetailsDocument>.IndexKeys.Ascending(d => d.CourseId);
+            var indexKeysCourseId = Builders<CourseDetailsDocument>.IndexKeys.Ascending(d => d.CourseId);
+            try { _detailsCollection.Indexes.CreateOne(new CreateIndexModel<CourseDetailsDocument>(indexKeysCourseId, new CreateIndexOptions { Unique = true, Name = "Unique_CourseId_Index" })); } catch (MongoCommandException) { }
+
+          
+            var coveredIndexKeys = Builders<CourseDetailsDocument>.IndexKeys
+                .Ascending(d => d.MinRamGb)
+                .Ascending(d => d.CourseId); 
+
             try
             {
-                _detailsCollection.Indexes.CreateOne(
-                    new CreateIndexModel<CourseDetailsDocument>(
-                        indexKeys,
-                        new CreateIndexOptions { Unique = true, Name = "Unique_CourseId_Index" }
-                    )
-                );
+                _detailsCollection.Indexes.CreateOne(new CreateIndexModel<CourseDetailsDocument>(coveredIndexKeys, new CreateIndexOptions { Name = "RamGb_Covered_Index" }));
             }
             catch (MongoCommandException) { }
+
+            // 2.2. MULTIKEY ІНДЕКС ДЛЯ МАСИВУ (program_outline.topics)
+            // Використовується для методу FindByTopic.
+            var multikeyIndexKeys = Builders<CourseDetailsDocument>.IndexKeys.Ascending("program_outline.topics");
+            try { _detailsCollection.Indexes.CreateOne(new CreateIndexModel<CourseDetailsDocument>(multikeyIndexKeys, new CreateIndexOptions { Name = "Topics_Multikey_Index" })); } catch (MongoCommandException) { }
         }
 
+        // --- Операції Upsert та Clear (залишаються без змін) ---
 
         public void UpsertMany(List<CourseDetailsDocument> documents)
         {
@@ -55,11 +69,38 @@ namespace UniversityManagementSystem.Console.NoSql
             }
         }
 
-       
-       
         public List<CourseDetailsDocument> FindByRamRange(int minRamGb)
         {
             var filter = Builders<CourseDetailsDocument>.Filter.Gte(d => d.MinRamGb, minRamGb);
+
+            var projection = Builders<CourseDetailsDocument>.Projection
+                .Include(d => d.CourseId)
+                .Exclude(d => d.Id);
+
+            return _detailsCollection.Find(filter)
+                .Project<CourseDetailsDocument>(projection)
+                .ToList();
+        }
+
+       
+        public List<CourseDetailsDocument> FindByRamRangeCovered(int minRamGb)
+        {
+            var filter = Builders<CourseDetailsDocument>.Filter.Gte(d => d.MinRamGb, minRamGb);
+
+            var projection = Builders<CourseDetailsDocument>.Projection
+                .Include(d => d.CourseId)
+                .Include(d => d.MinRamGb)
+                .Exclude(d => d.Id);
+
+            return _detailsCollection.Find(filter)
+                .Project<CourseDetailsDocument>(projection)
+                .ToList();
+        }
+
+       
+        public List<CourseDetailsDocument> FindByTopic(string topic)
+        {
+            var filter = Builders<CourseDetailsDocument>.Filter.Eq("program_outline.topics", topic);
 
             var projection = Builders<CourseDetailsDocument>.Projection
                 .Include(d => d.CourseId)
