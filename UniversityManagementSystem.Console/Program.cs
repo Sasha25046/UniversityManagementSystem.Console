@@ -55,33 +55,6 @@ namespace UniversityManagementSystem.Console
                     sw.Stop();
                     System.Console.WriteLine($"2. Запис MongoDB (Atlas): {sw.ElapsedMilliseconds} мс.");
 
-                    System.Console.WriteLine("\n3.1. ТЕСТ: Базовий числовий фільтр (Min RAM).");
-                    int searchRam = BenchmarkDataGenerator.SEARCH_MIN_RAM; // 32 GB
-
-                    sw.Restart();
-                    var sqlRamResults = sqlRepo.FindByRamRangeSql(searchRam);
-                    sw.Stop();
-                    System.Console.WriteLine($"  MySQL (Base Filter): {sw.ElapsedMilliseconds} мс. Знайдено: {sqlRamResults.Count}");
-
-                    sw.Restart();
-                    var mongoRamResults = noSqlRepo.FindByRamRange(searchRam);
-                    sw.Stop();
-                    System.Console.WriteLine($"  MongoDB (Base Filter): {sw.ElapsedMilliseconds} мс. Знайдено: {mongoRamResults.Count}");
-
-
-                    System.Console.WriteLine("\n3.2. ТЕСТ: Покритий Запит (Covered Query - Min RAM + CourseId).");
-
-                    sw.Restart();
-                    var sqlCoveredResults = sqlRepo.FindByRamRangeCoveredSql(searchRam);
-                    sw.Stop();
-                    System.Console.WriteLine($"  MySQL (Covered Query): {sw.ElapsedMilliseconds} мс. Знайдено: {sqlCoveredResults.Count}");
-
-                    sw.Restart();
-                    var mongoCoveredResults = noSqlRepo.FindByRamRangeCovered(searchRam);
-                    sw.Stop();
-                    System.Console.WriteLine($"  MongoDB (Covered Query): {sw.ElapsedMilliseconds} мс. Знайдено: {mongoCoveredResults.Count}");
-
-
                     System.Console.WriteLine("\n3.3. ТЕСТ: Пошук в масиві Topics (Multikey Index).");
                     string searchTopic = BenchmarkDataGenerator.SEARCH_TOPIC;
 

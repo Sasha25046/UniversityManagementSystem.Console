@@ -10,8 +10,6 @@ namespace UniversityManagementSystem.Console
     public interface ICourseRepository
     {
         void UpsertTestCourses(List<BenchmarkDataGenerator.CourseSqlData> courses, int adminUserId);
-        List<int> FindByRamRangeSql(int minRamGb);
-        List<int> FindByRamRangeCoveredSql(int minRamGb); 
         List<int> FindByTopicSql(string topic);          
         void DeleteTestCourses(int startId);
     }
@@ -46,42 +44,6 @@ namespace UniversityManagementSystem.Console
             }
         }
 
-       
-        
-        public List<int> FindByRamRangeSql(int minRamGb)
-        {
-            var courseIds = new List<int>();
-            using (var command = new MySqlCommand("sp_FindCoursesByRamRange", _connection))
-            {
-                command.CommandType = CommandType.StoredProcedure;
-                command.Parameters.AddWithValue("p_min_ram", minRamGb);
-
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        courseIds.Add(reader.GetInt32("course_id"));
-                    }
-                }
-            }
-            return courseIds;
-        }
-
-        public List<int> FindByRamRangeCoveredSql(int minRamGb)
-        {
-           
-            var courseIds = new List<int>();
-            using (var command = new MySqlCommand("sp_FindCoursesByRamRange", _connection))
-            {
-                command.CommandType = CommandType.StoredProcedure;
-                command.Parameters.AddWithValue("p_min_ram", minRamGb);
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read()) { courseIds.Add(reader.GetInt32("course_id")); }
-                }
-            }
-            return courseIds;
-        }
 
         public List<int> FindByTopicSql(string topic)
         {

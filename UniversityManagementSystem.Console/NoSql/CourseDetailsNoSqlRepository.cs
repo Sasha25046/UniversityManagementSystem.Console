@@ -9,10 +9,7 @@ namespace UniversityManagementSystem.Console.NoSql
     {
         void UpsertMany(List<CourseDetailsDocument> documents);
 
-        List<CourseDetailsDocument> FindByRamRange(int minRamGb);
-
-        List<CourseDetailsDocument> FindByRamRangeCovered(int minRamGb);
-
+       
         List<CourseDetailsDocument> FindByTopic(string topic);
 
         void ClearCollection();
@@ -47,8 +44,6 @@ namespace UniversityManagementSystem.Console.NoSql
             }
             catch (MongoCommandException) { }
 
-            // 2.2. MULTIKEY ІНДЕКС ДЛЯ МАСИВУ (program_outline.topics)
-            // Використовується для методу FindByTopic.
             var multikeyIndexKeys = Builders<CourseDetailsDocument>.IndexKeys.Ascending("program_outline.topics");
             try { _detailsCollection.Indexes.CreateOne(new CreateIndexModel<CourseDetailsDocument>(multikeyIndexKeys, new CreateIndexOptions { Name = "Topics_Multikey_Index" })); } catch (MongoCommandException) { }
         }
@@ -67,34 +62,6 @@ namespace UniversityManagementSystem.Console.NoSql
             {
                 _detailsCollection.BulkWrite(models);
             }
-        }
-
-        public List<CourseDetailsDocument> FindByRamRange(int minRamGb)
-        {
-            var filter = Builders<CourseDetailsDocument>.Filter.Gte(d => d.MinRamGb, minRamGb);
-
-            var projection = Builders<CourseDetailsDocument>.Projection
-                .Include(d => d.CourseId)
-                .Exclude(d => d.Id);
-
-            return _detailsCollection.Find(filter)
-                .Project<CourseDetailsDocument>(projection)
-                .ToList();
-        }
-
-       
-        public List<CourseDetailsDocument> FindByRamRangeCovered(int minRamGb)
-        {
-            var filter = Builders<CourseDetailsDocument>.Filter.Gte(d => d.MinRamGb, minRamGb);
-
-            var projection = Builders<CourseDetailsDocument>.Projection
-                .Include(d => d.CourseId)
-                .Include(d => d.MinRamGb)
-                .Exclude(d => d.Id);
-
-            return _detailsCollection.Find(filter)
-                .Project<CourseDetailsDocument>(projection)
-                .ToList();
         }
 
        
